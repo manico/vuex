@@ -1,3 +1,5 @@
+import { isObject } from './util'
+
 export const mapState = normalizeNamespace((namespace, states) => {
   const res = {}
   normalizeMap(states).forEach(({ key, val }) => {
@@ -82,11 +84,46 @@ export const mapActions = normalizeNamespace((namespace, actions) => {
   return res
 })
 
+export const mapModels = normalizeNamespace((namespace, states) => {
+  const mapState = (context, val) => {
+    let state = context.$store.state
+    let getters = context.$store.getters
+    if (namespace) {
+      const module = getModuleByNamespace(context.$store, 'mapState', namespace)
+      if (!module) {
+        return
+      }
+      state = module.context.state
+      getters = module.context.getters
+    }
+
+    const handler = isObject(val) && val.handler ? val.handler : val
+    return typeof handler === 'function'
+      ? handler.call(context, state, getters)
+      : state[handler]
+  }
+
+  const res = {}
+  normalizeMap(states).forEach(({ key, val }) => {
+    res[key] = {
+      get () {
+        return mapState(this, val)
+      },
+      set (v) {
+        const mutation = isObject(val) && val.mutation ? val.mutation : key
+        this.$store.commit(mutation, v)
+      }
+    }
+  })
+  return res
+})
+
 export const createNamespacedHelpers = (namespace) => ({
   mapState: mapState.bind(null, namespace),
   mapGetters: mapGetters.bind(null, namespace),
   mapMutations: mapMutations.bind(null, namespace),
-  mapActions: mapActions.bind(null, namespace)
+  mapActions: mapActions.bind(null, namespace),
+  mapModels: mapModels.bind(null, namespace)
 })
 
 function normalizeMap (map) {
